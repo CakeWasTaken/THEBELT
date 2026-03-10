@@ -1,644 +1,731 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Star, LogOut, Trophy, Zap, Trash2, UserMinus, Plus, Minus, Share2, Link as LinkIcon, X, Check, QrCode, Lock, AlertTriangle, Key } from 'lucide-react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc, onSnapshot, collection, updateDoc, getDoc, deleteDoc, getDocs } from 'firebase/firestore';
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LykkeBæltet</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    body { margin: 0; background: #020617; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
 
-// --- FIREBASE SETUP ---
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'wheel-app-default';
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
 
-// --- KONFIGURATION AF BÆLTER ---
-const POINT_SECTIONS = [
-  { p: 5, color: '#10b981' }, { p: 1, color: '#ef4444' }, { p: 10, color: '#3b82f6' },
-  { p: 2, color: '#06b6d4' }, { p: 15, color: '#f59e0b' }, { p: 5, color: '#10b981' },
-  { p: 20, color: '#ec4899' }, { p: 5, color: '#10b981' }, { p: 50, color: '#fbbf24', glow: true },
-  { p: 2, color: '#06b6d4' }, { p: 10, i: 1, color: '#3b82f6' }, { p: 5, color: '#10b981' },
-  { p: 1, color: '#ef4444' }, { p: 15, color: '#f59e0b' }, { p: 5, color: '#10b981' },
-  { p: 20, color: '#ec4899' }, { p: 2, color: '#06b6d4' }, { p: 10, color: '#3b82f6' },
-];
-
-const MULTI_SECTIONS = [
-  { p: 10, color: '#fbbf24', glow: true },
-  { p: 9, color: '#22c55e' },
-  { p: 3, color: '#f97316' },
-  { p: 8, color: '#3b82f6' },
-  { p: 4, color: '#ec4899' },
-  { p: 7, color: '#06b6d4' },
-  { p: 5, color: '#facc15' },
-  { p: 6, color: '#ef4444' },
-  { p: 3, color: '#14b8a6' }
-];
-
-const ITEM_WIDTH = 140; 
-
-const StarIcon = ({ color, value, isWinner, isGlow }) => (
-  <div className={`relative flex items-center justify-center transition-all duration-500 ${isWinner ? 'scale-125' : 'scale-110'} h-full w-full`}>
-    <div className={`absolute inset-2 border-2 rounded-3xl transition-all duration-500 ${isWinner ? 'opacity-100 scale-105' : 'opacity-30'}`}
-         style={{ borderColor: color, boxShadow: isWinner ? `0 0 20px ${color}, inset 0 0 10px ${color}` : 'none' }}></div>
-    
-    <div className="relative z-10">
-      <svg viewBox="0 0 24 24" className="w-24 h-24 drop-shadow-xl" style={{ filter: isWinner ? `drop-shadow(0 0 30px ${color})` : 'none' }}>
-        <path
-          fill={color}
-          d="M12 1.74l3.09 6.26 6.91 1-5 4.87 1.18 6.88-6.18-3.25-6.18 3.25 1.18-6.88-5-4.87 6.91-1z"
-        />
-      </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-white text-3xl font-black drop-shadow-md">
-        {value}x
-      </span>
-    </div>
-    {isGlow && (
-        <div className="absolute inset-0 rounded-full animate-pulse opacity-50" style={{ boxShadow: `0 0 40px ${color}` }}></div>
-    )}
-  </div>
-);
-
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [allUsers, setAllUsers] = useState([]);
-  const [config, setConfig] = useState({ shareUrl: 'https://google.com', adminPass: 'admin123' });
-  const [view, setView] = useState('login');
-  const [loginName, setLoginName] = useState('');
-  const [loginPass, setLoginPass] = useState('');
-  
-  const [isSpinning, setIsSpinning] = useState(false);
-  const [spinPhase, setSpinPhase] = useState('idle'); 
-  const [currentMultiplier, setCurrentMultiplier] = useState(1);
-  const [winningIndex, setWinningIndex] = useState(null);
-  const [fireworks, setFireworks] = useState([]);
-  const [flashes, setFlashes] = useState([]);
-  const [shockwaves, setShockwaves] = useState([]);
-  const [shakeIntensity, setShakeIntensity] = useState(0);
-  const [bgGlow, setBgGlow] = useState(null);
-  const [beltGlowColor, setBeltGlowColor] = useState(null);
-
-  const [adminAmount, setAdminAmount] = useState(1);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [showNukeConfirm, setShowNukeConfirm] = useState(false);
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [newShareUrl, setNewShareUrl] = useState('');
-  const [newAdminPass, setNewAdminPass] = useState('');
-  const [copyStatus, setCopyStatus] = useState(false);
-
-  const [offset, setOffset] = useState(0); 
-  const offsetRef = useRef(0); 
-  const velocityRef = useRef(0);
-
-  useEffect(() => {
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth);
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, (u) => { if (u) setUser(u); });
-    const savedUserId = localStorage.getItem('wheel_user_id');
-    const savedRole = localStorage.getItem('wheel_role');
-    if (savedUserId && savedRole === 'user') setView('user');
-    else if (savedRole === 'admin') setView('admin');
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!user) return;
-    const q = collection(db, 'artifacts', appId, 'public', 'data', 'users');
-    const unsubUsers = onSnapshot(q, (snapshot) => {
-      setAllUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-
-    const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global');
-    const unsubConfig = onSnapshot(configRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setConfig(data);
-        setNewShareUrl(data.shareUrl || 'https://google.com');
-        setNewAdminPass(data.adminPass || 'admin123');
-      }
-    });
-    return () => { unsubUsers(); unsubConfig(); };
-  }, [user]);
-
-  useEffect(() => {
-    let lastTime = performance.now();
-    const update = (now) => {
-      const deltaTime = Math.min((now - lastTime) / 1000, 0.1); 
-      lastTime = now;
-      if (velocityRef.current > 0.1) {
-        offsetRef.current += velocityRef.current * deltaTime;
-        let friction = 0.988; 
-        if (velocityRef.current < 400) friction = 0.965; 
-        else if (velocityRef.current < 150) friction = 0.92; 
-        velocityRef.current *= Math.pow(friction, deltaTime * 60); 
-        if (velocityRef.current < 10) velocityRef.current = 0;
-      }
-      setOffset(offsetRef.current);
-      requestAnimationFrame(update);
-    };
-    const animId = requestAnimationFrame(update);
-    return () => cancelAnimationFrame(animId);
-  }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem('wheel_user_id');
-    localStorage.removeItem('wheel_role');
-    setView('login');
-  };
-
-  const handleSpin = async (isSuper = false) => {
-    const active = getActiveUser();
-    const userId = localStorage.getItem('wheel_user_id');
-    const cost = isSuper ? 5 : 1;
-    if (!userId || active.tokens < cost || isSpinning || velocityRef.current > 1) return;
-    
-    const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', userId);
-    await updateDoc(userRef, { tokens: active.tokens - cost });
-    
-    setIsSpinning(true);
-    setWinningIndex(null); 
-    setCurrentMultiplier(1);
-    setBgGlow(null);
-    setBeltGlowColor(null);
-
-    if (isSuper) {
-      setSpinPhase('multi');
-      offsetRef.current = 0;
-      velocityRef.current = 3800 + Math.random() * 800; 
-      const checkMultiEnd = setInterval(() => {
-        if (velocityRef.current === 0) {
-          clearInterval(checkMultiEnd);
-          const mIdx = Math.floor((offsetRef.current / ITEM_WIDTH) % MULTI_SECTIONS.length);
-          const multiplier = MULTI_SECTIONS[mIdx].p;
-          setCurrentMultiplier(multiplier);
-          setTimeout(() => {
-            setSpinPhase('point');
-            offsetRef.current = 0;
-            velocityRef.current = 4200 + Math.random() * 1000;
-            const checkPointEnd = setInterval(() => {
-              if (velocityRef.current === 0) {
-                clearInterval(checkPointEnd);
-                setTimeout(() => finalizeSpin(userId, multiplier), 400);
-              }
-            }, 100);
-          }, 1800);
+    // Lucide icons via UMD
+    const makeIcon = (name) => ({ size = 24, className = '', style = {} }) => {
+      const el = lucide[name];
+      if (!el) return null;
+      const svg = lucide.createElement(el);
+      // Use dangerouslySetInnerHTML trick via a wrapper
+      return React.createElement('span', {
+        className,
+        style: { display: 'inline-flex', alignItems: 'center', ...style },
+        dangerouslySetInnerHTML: {
+          __html: lucide.toSvg(el, { width: size, height: size, stroke: 'currentColor', 'stroke-width': 2, fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })
         }
-      }, 100);
-    } else {
-      setSpinPhase('point');
-      offsetRef.current = 0;
-      velocityRef.current = 2800 + Math.random() * 800; 
-      const checkEnd = setInterval(() => {
-          if (velocityRef.current === 0) {
+      });
+    };
+
+    // Build icons the proper way using lucide UMD
+    function Icon({ name, size = 24, className = '', fill }) {
+      const iconData = lucide.icons ? lucide.icons[name] : lucide[name];
+      if (!iconData) return null;
+      const [tag, attrs, children] = iconData;
+      const svgAttrs = {
+        xmlns: 'http://www.w3.org/2000/svg',
+        width: size,
+        height: size,
+        viewBox: '0 0 24 24',
+        fill: fill || 'none',
+        stroke: 'currentColor',
+        strokeWidth: 2,
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+        className,
+      };
+      const svgChildren = (children || []).map((child, i) => {
+        const [childTag, childAttrs] = child;
+        return React.createElement(childTag, { key: i, ...childAttrs });
+      });
+      return React.createElement('svg', svgAttrs, ...svgChildren);
+    }
+
+    const Settings    = (p) => <Icon name="settings" {...p} />;
+    const Star        = (p) => <Icon name="star" {...p} />;
+    const LogOut      = (p) => <Icon name="log-out" {...p} />;
+    const Trash2      = (p) => <Icon name="trash-2" {...p} />;
+    const Plus        = (p) => <Icon name="plus" {...p} />;
+    const Minus       = (p) => <Icon name="minus" {...p} />;
+    const Share2      = (p) => <Icon name="share-2" {...p} />;
+    const ExternalLink= (p) => <Icon name="external-link" {...p} />;
+    const X           = (p) => <Icon name="x" {...p} />;
+    const Check       = (p) => <Icon name="check" {...p} />;
+    const AlertTriangle=(p) => <Icon name="alert-triangle" {...p} />;
+    const Key         = (p) => <Icon name="key" {...p} />;
+
+    // --- GOOGLE SHEETS DATABASE ---
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwKN5aiuRcyP_2kby4d4aesgkc7aYp6Bulc-_2vtwr9WyRReSZcbG6lUR1Luoc-hKXC/exec';
+    const POLL_INTERVAL = 3000;
+
+    let _cache = {
+      users: {},
+      config: { shareUrl: window.location.href, adminPass: 'admin123' },
+      listeners: { users: [], config: [] },
+    };
+
+    const api = {
+      get: (params) => fetch(`${APPS_SCRIPT_URL}?${new URLSearchParams(params)}`).then(r => r.json()),
+      post: (body) => fetch(APPS_SCRIPT_URL, { method: 'POST', body: JSON.stringify(body) }).then(r => r.json()),
+    };
+
+    const db = {
+      getUsers: () => Object.entries(_cache.users).map(([id, data]) => ({ id, ...data })),
+      getUser: (id) => _cache.users[id] ? { id, ..._cache.users[id] } : null,
+      getConfig: () => ({ ..._cache.config }),
+
+      setUser: async (id, data) => {
+        _cache.users[id] = { ..._cache.users[id], ...data };
+        db._notifyUsers();
+        try { await api.post({ action: 'setUser', id, ..._cache.users[id] }); } catch(e) {}
+      },
+      deleteUser: async (id) => {
+        delete _cache.users[id];
+        db._notifyUsers();
+        try { await api.post({ action: 'deleteUser', id }); } catch(e) {}
+      },
+      deleteAllUsers: async () => {
+        _cache.users = {};
+        db._notifyUsers();
+        try { await api.post({ action: 'deleteAllUsers' }); } catch(e) {}
+      },
+      setConfig: async (data) => {
+        _cache.config = { ..._cache.config, ...data };
+        db._notifyConfig();
+        try { await api.post({ action: 'setConfig', ...data }); } catch(e) {}
+      },
+
+      onUsers: (cb) => {
+        _cache.listeners.users.push(cb);
+        cb(db.getUsers());
+        return () => { _cache.listeners.users = _cache.listeners.users.filter(f => f !== cb); };
+      },
+      onConfig: (cb) => {
+        _cache.listeners.config.push(cb);
+        cb(db.getConfig());
+        return () => { _cache.listeners.config = _cache.listeners.config.filter(f => f !== cb); };
+      },
+
+      _notifyUsers: () => { const u = db.getUsers(); _cache.listeners.users.forEach(cb => cb(u)); },
+      _notifyConfig: () => { const c = db.getConfig(); _cache.listeners.config.forEach(cb => cb(c)); },
+
+      _poll: async () => {
+        try {
+          const users = await api.get({ action: 'getUsers' });
+          if (Array.isArray(users)) {
+            const fresh = {};
+            users.forEach(u => { const { id, ...rest } = u; fresh[id] = rest; });
+            if (JSON.stringify(fresh) !== JSON.stringify(_cache.users)) {
+              _cache.users = fresh;
+              db._notifyUsers();
+            }
+          }
+        } catch(e) {}
+        try {
+          const config = await api.get({ action: 'getConfig' });
+          if (config && !config.error) {
+            if (JSON.stringify(config) !== JSON.stringify(_cache.config)) {
+              _cache.config = config;
+              db._notifyConfig();
+            }
+          }
+        } catch(e) {}
+      },
+
+      init: async () => {
+        await db._poll();
+        setInterval(db._poll, POLL_INTERVAL);
+      },
+    };
+
+    // --- KONFIGURATION AF SEKTIONER ---
+    const POINT_SECTIONS = [
+      { p: 5, color: '#10b981' }, { p: 1, color: '#ef4444' }, { p: 10, color: '#3b82f6' },
+      { p: 2, color: '#06b6d4' }, { p: 15, color: '#f59e0b' }, { p: 5, color: '#10b981' },
+      { p: 20, color: '#ec4899' }, { p: 5, color: '#10b981' }, { p: 50, color: '#fbbf24', glow: true },
+      { p: 2, color: '#06b6d4' }, { p: 10, color: '#3b82f6' }, { p: 5, color: '#10b981' },
+      { p: 1, color: '#ef4444' }, { p: 15, color: '#f59e0b' }, { p: 5, color: '#10b981' },
+      { p: 20, color: '#ec4899' }, { p: 2, color: '#06b6d4' }, { p: 10, color: '#3b82f6' },
+    ];
+
+    const MULTI_SECTIONS = [
+      { p: 10, color: '#fbbf24', glow: true },
+      { p: 9, color: '#22c55e' },
+      { p: 3, color: '#f97316' },
+      { p: 8, color: '#3b82f6' },
+      { p: 4, color: '#ec4899' },
+      { p: 7, color: '#06b6d4' },
+      { p: 5, color: '#facc15' },
+      { p: 6, color: '#ef4444' },
+      { p: 3, color: '#14b8a6' }
+    ];
+
+    const ITEM_WIDTH = 140;
+
+    const StarIcon = ({ color, value, isWinner }) => (
+      <div className={`relative flex items-center justify-center transition-all duration-500 ${isWinner ? 'scale-125' : 'scale-110'} h-full w-full`}>
+        <div className={`absolute inset-2 border-2 rounded-3xl transition-all duration-500 ${isWinner ? 'opacity-100 scale-105' : 'opacity-30'}`}
+             style={{ borderColor: color, boxShadow: isWinner ? `0 0 20px ${color}, inset 0 0 10px ${color}` : 'none' }}></div>
+        <div className="relative z-10">
+          <svg viewBox="0 0 24 24" width="96" height="96" style={{ filter: isWinner ? `drop-shadow(0 0 30px ${color})` : 'none' }}>
+            <path fill={color} d="M12 1.74l3.09 6.26 6.91 1-5 4.87 1.18 6.88-6.18-3.25-6.18 3.25 1.18-6.88-5-4.87 6.91-1z" />
+          </svg>
+          <span className="absolute inset-0 flex items-center justify-center text-black text-3xl font-black">{value}x</span>
+        </div>
+      </div>
+    );
+
+    const ShareModal = ({ url, onClose, copyToClipboard, copyStatus }) => {
+      const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
+      return (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="bg-slate-900 w-full max-w-md p-8 rounded-3xl border border-slate-800 shadow-2xl relative text-center">
+            <button onClick={onClose} className="absolute top-6 right-6 text-slate-500 hover:text-white"><X size={24} /></button>
+            <div className="mb-6 mx-auto bg-white p-4 rounded-3xl inline-block">
+              <img src={qrCodeUrl} alt="QR Kode" className="w-40 h-40" onError={(e) => { e.target.style.display='none'; }} />
+            </div>
+            <h2 className="text-2xl font-black mb-2 uppercase tracking-tight">Del Spillet</h2>
+            <p className="text-slate-400 text-sm mb-8">Scan QR-koden eller send linket til spillerne.</p>
+            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 mb-6 flex items-center justify-between gap-4 overflow-hidden">
+              <span className="text-indigo-400 font-mono text-xs truncate">{url}</span>
+              <button onClick={copyToClipboard} className="flex-shrink-0 bg-indigo-600 p-2 rounded-lg text-white hover:bg-indigo-500 transition-all">
+                {copyStatus ? <Check size={18} /> : <Share2 size={18} />}
+              </button>
+            </div>
+            <button onClick={onClose} className="w-full bg-slate-800 py-4 rounded-2xl font-black text-slate-300 hover:bg-slate-700 transition-all uppercase tracking-widest">Luk</button>
+          </div>
+        </div>
+      );
+    };
+
+    function App() {
+      const [allUsers, setAllUsers] = useState([]);
+      const [config, setConfig] = useState({ shareUrl: window.location.href, adminPass: 'admin123' });
+      const [view, setView] = useState('login');
+      const [loginName, setLoginName] = useState('');
+      const [loginPass, setLoginPass] = useState('');
+
+      const [isSpinning, setIsSpinning] = useState(false);
+      const [spinPhase, setSpinPhase] = useState('idle');
+      const [currentMultiplier, setCurrentMultiplier] = useState(1);
+      const [winningIndex, setWinningIndex] = useState(null);
+      const [shockwaves, setShockwaves] = useState([]);
+      const [shakeIntensity, setShakeIntensity] = useState(0);
+      const [bgGlow, setBgGlow] = useState(null);
+      const [beltGlowColor, setBeltGlowColor] = useState(null);
+      const [flyingStars, setFlyingStars] = useState([]);
+      const [screenFlash, setScreenFlash] = useState(null);
+      const [floatingTexts, setFloatingTexts] = useState([]);
+
+      const [adminAmount, setAdminAmount] = useState(1);
+      const [deleteConfirm, setDeleteConfirm] = useState(null);
+      const [showNukeConfirm, setShowNukeConfirm] = useState(false);
+      const [showShareModal, setShowShareModal] = useState(false);
+      const [showSettingsModal, setShowSettingsModal] = useState(false);
+      const [newShareUrl, setNewShareUrl] = useState('');
+      const [newAdminPass, setNewAdminPass] = useState('');
+      const [copyStatus, setCopyStatus] = useState(false);
+
+      const [offset, setOffset] = useState(0);
+      const offsetRef = useRef(0);
+      const velocityRef = useRef(0);
+      const scoreRef = useRef(null);
+      const beltContainerRef = useRef(null);
+
+      useEffect(() => {
+        db.init();
+        const unsubUsers = db.onUsers(setAllUsers);
+        const unsubConfig = db.onConfig((c) => {
+          setConfig(c);
+          setNewShareUrl(c.shareUrl);
+          setNewAdminPass(c.adminPass);
+        });
+        const savedUserId = localStorage.getItem('wheel_user_id');
+        const savedRole = localStorage.getItem('wheel_role');
+        if (savedUserId && savedRole === 'user') setView('user');
+        else if (savedRole === 'admin') setView('admin');
+        return () => { unsubUsers(); unsubConfig(); };
+      }, []);
+
+      useEffect(() => {
+        let lastTime = performance.now();
+        const update = (now) => {
+          const deltaTime = Math.min((now - lastTime) / 1000, 0.1);
+          lastTime = now;
+          if (velocityRef.current > 0.1) {
+            offsetRef.current += velocityRef.current * deltaTime;
+            let friction = 0.988;
+            if (velocityRef.current < 400) friction = 0.965;
+            else if (velocityRef.current < 150) friction = 0.92;
+            velocityRef.current *= Math.pow(friction, deltaTime * 60);
+            if (velocityRef.current < 10) velocityRef.current = 0;
+          }
+          setOffset(offsetRef.current);
+          requestAnimationFrame(update);
+        };
+        const animId = requestAnimationFrame(update);
+        return () => cancelAnimationFrame(animId);
+      }, []);
+
+      const handleLogout = () => {
+        localStorage.removeItem('wheel_user_id');
+        localStorage.removeItem('wheel_role');
+        setView('login');
+      };
+
+      const spawnStars = (amount, fieldColor) => {
+        let spawnX = window.innerWidth / 2;
+        let spawnY = window.innerHeight / 2;
+        if (beltContainerRef.current) {
+          const rect = beltContainerRef.current.getBoundingClientRect();
+          spawnX = rect.left + rect.width / 2;
+          spawnY = rect.top + rect.height / 2;
+        }
+        for (let i = 0; i < amount; i++) {
+          setTimeout(() => {
+            const id = Math.random();
+            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.random() * 120;
+            const x = spawnX + Math.cos(angle) * radius;
+            const y = spawnY + Math.sin(angle) * radius;
+            setFlyingStars(prev => [...prev, { id, x, y, color: '#FFFFFF', glow: fieldColor, phase: 'spawn' }]);
+            setTimeout(() => {
+              setFlyingStars(prev => prev.map(s => s.id === id ? { ...s, phase: 'pop' } : s));
+              setTimeout(() => setFlyingStars(prev => prev.filter(s => s.id !== id)), 300);
+            }, 800);
+          }, i * 15);
+        }
+      };
+
+      const launchEffects = (value, color) => {
+        let totalWaitTime = 2500, intensity = 0, flashDuration = 400;
+        if (value <= 2) { totalWaitTime = 700; intensity = 4; flashDuration = 150; }
+        else if (value <= 10) { totalWaitTime = 1200; intensity = 10; flashDuration = 300; }
+        else if (value <= 40) { totalWaitTime = 2000; intensity = 25; flashDuration = 500; }
+        else { totalWaitTime = 3000; intensity = 50; flashDuration = 800; }
+
+        setScreenFlash(color);
+        setTimeout(() => setScreenFlash(null), flashDuration);
+
+        const textId = Math.random();
+        setFloatingTexts(prev => [...prev, { id: textId, value, color }]);
+        setTimeout(() => setFloatingTexts(prev => prev.filter(t => t.id !== textId)), 2000);
+
+        setShakeIntensity(intensity);
+        setTimeout(() => setShakeIntensity(0), totalWaitTime);
+        if (value >= 15) { setBgGlow(color); setTimeout(() => setBgGlow(null), totalWaitTime); }
+        if (value > 25) setBeltGlowColor(color);
+
+        if (value >= 15) {
+          let waveCount = value >= 50 ? 5 : 2;
+          for (let i = 0; i < waveCount; i++) {
+            setTimeout(() => {
+              const swId = Math.random();
+              setShockwaves(prev => [...prev, { id: swId, color: value >= 50 ? '#fbbf24' : color }]);
+              setTimeout(() => setShockwaves(prev => prev.filter(s => s.id !== swId)), 1200);
+            }, i * 300);
+          }
+        }
+        return totalWaitTime;
+      };
+
+      const finalizeSpin = (userId, multi) => {
+        const strip = spinPhase === 'multi' ? MULTI_SECTIONS : POINT_SECTIONS;
+        const winnerIdx = Math.floor((offsetRef.current / ITEM_WIDTH) % strip.length);
+        setWinningIndex(winnerIdx);
+        const baseVal = strip[winnerIdx].p;
+        const finalVal = baseVal * multi;
+        const winnerColor = strip[winnerIdx].color;
+        const showDuration = launchEffects(finalVal, winnerColor);
+        spawnStars(finalVal, winnerColor);
+        const existingUser = db.getUser(userId);
+        if (existingUser) db.setUser(userId, { points: (existingUser.points || 0) + finalVal });
+        setTimeout(() => {
+          setIsSpinning(false);
+          setWinningIndex(null);
+          setSpinPhase('idle');
+          setBeltGlowColor(null);
+        }, showDuration + 200);
+      };
+
+      const handleSpin = (isSuper = false) => {
+        const userId = localStorage.getItem('wheel_user_id');
+        const activeUser = allUsers.find(u => u.id === userId) || { tokens: 0 };
+        const cost = isSuper ? 5 : 1;
+        if (!userId || activeUser.tokens < cost || isSpinning || velocityRef.current > 1) return;
+        db.setUser(userId, { tokens: activeUser.tokens - cost });
+        setIsSpinning(true);
+        setWinningIndex(null);
+        setCurrentMultiplier(1);
+        setBgGlow(null);
+        setBeltGlowColor(null);
+
+        if (isSuper) {
+          setSpinPhase('multi');
+          offsetRef.current = 0;
+          velocityRef.current = 3800 + Math.random() * 800;
+          const checkMultiEnd = setInterval(() => {
+            if (velocityRef.current === 0) {
+              clearInterval(checkMultiEnd);
+              const mIdx = Math.floor((offsetRef.current / ITEM_WIDTH) % MULTI_SECTIONS.length);
+              setWinningIndex(mIdx);
+              const multiplier = MULTI_SECTIONS[mIdx].p;
+              setCurrentMultiplier(multiplier);
+              setTimeout(() => {
+                setWinningIndex(null);
+                setSpinPhase('point');
+                offsetRef.current = 0;
+                velocityRef.current = 4200 + Math.random() * 1000;
+                const checkPointEnd = setInterval(() => {
+                  if (velocityRef.current === 0) {
+                    clearInterval(checkPointEnd);
+                    setTimeout(() => finalizeSpin(userId, multiplier), 400);
+                  }
+                }, 100);
+              }, 1500);
+            }
+          }, 100);
+        } else {
+          setSpinPhase('point');
+          offsetRef.current = 0;
+          velocityRef.current = 2800 + Math.random() * 800;
+          const checkEnd = setInterval(() => {
+            if (velocityRef.current === 0) {
               clearInterval(checkEnd);
               setTimeout(() => finalizeSpin(userId, 1), 400);
-          }
-      }, 100);
-    }
-  };
-
-  const finalizeSpin = async (userId, multi) => {
-    const currentStrip = spinPhase === 'multi' ? MULTI_SECTIONS : POINT_SECTIONS;
-    const winnerIdx = Math.floor((offsetRef.current / ITEM_WIDTH) % currentStrip.length);
-    setWinningIndex(winnerIdx); 
-    const baseVal = currentStrip[winnerIdx].p;
-    const finalVal = baseVal * multi;
-    const winnerColor = currentStrip[winnerIdx].color;
-    const showDuration = launchEffects(finalVal, winnerColor);
-    const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', userId);
-    const snap = await getDoc(userRef);
-    if (snap.exists()) {
-        const currentPoints = snap.data().points || 0;
-        await updateDoc(userRef, { points: currentPoints + finalVal });
-    }
-    setTimeout(() => {
-      setIsSpinning(false);
-      setWinningIndex(null);
-      setSpinPhase('idle');
-      setBeltGlowColor(null);
-    }, showDuration + 200); 
-  };
-
-  const launchEffects = (value, color) => {
-    let fireworkCount = 0;
-    let delayBetween = 0;
-    let totalWaitTime = 2500;
-    let intensity = 0;
-
-    if (value <= 2) {
-      fireworkCount = 2; delayBetween = 300; totalWaitTime = 1000; intensity = 1;
-    } else if (value <= 10) {
-      fireworkCount = 5; delayBetween = 200; totalWaitTime = 1500; intensity = 3;
-    } else if (value <= 40) {
-      fireworkCount = 10; delayBetween = 150; totalWaitTime = 2500; intensity = 10;
-    } else {
-      fireworkCount = 20; delayBetween = 80; totalWaitTime = 4000; intensity = 30;
-    }
-
-    setShakeIntensity(intensity);
-    setTimeout(() => setShakeIntensity(0), totalWaitTime);
-    if (value >= 20) { setBgGlow(color); setTimeout(() => setBgGlow(null), totalWaitTime); }
-    
-    if (value > 30) {
-        setBeltGlowColor(color);
-    }
-
-    if (value >= 15) {
-        let waveCount = 1;
-        if (value >= 50) waveCount = 3;
-        if (value >= 100) waveCount = 5;
-        if (value >= 200) waveCount = 8;
-        if (value >= 400) waveCount = 12;
-
-        for (let i = 0; i < waveCount; i++) {
-            setTimeout(() => {
-                const swId = Math.random();
-                const swColor = value >= 50 ? (i % 2 === 0 ? '#fbbf24' : '#ffffff') : color;
-                setShockwaves(prev => [...prev, { id: swId, color: swColor }]);
-                setTimeout(() => setShockwaves(prev => prev.filter(s => s.id !== swId)), 1200);
-            }, i * 350);
+            }
+          }, 100);
         }
-    }
+      };
 
-    for (let i = 0; i < fireworkCount; i++) {
-      setTimeout(() => {
-        const x = 20 + Math.random() * 60;
-        const y = 30 + Math.random() * 30;
-        const pColor = value > 50 ? ['#fbbf24', '#f59e0b', '#ffffff'][Math.floor(Math.random()*3)] : color;
-        const flashId = Math.random();
-        setFlashes(prev => [...prev, { id: flashId, x, y, color: pColor, size: value > 25 ? 160 : 80 }]);
-        setTimeout(() => setFlashes(prev => prev.filter(f => f.id !== flashId)), 200);
+      const getActiveUser = () => {
+        const id = localStorage.getItem('wheel_user_id');
+        return allUsers.find(u => u.id === id) || { username: 'Gæst', tokens: 0, points: 0 };
+      };
 
-        const newParticles = Array.from({ length: value > 40 ? 45 : 20 }).map(() => ({
-          id: Math.random(),
-          x, y,
-          angle: Math.random() * 360,
-          distance: (value > 40 ? 180 : 100) + Math.random() * 180,
-          color: pColor,
-          size: (value > 40 ? 5 : 2) + Math.random() * 5,
-          duration: 0.6 + Math.random() * 0.8,
-        }));
-        setFireworks(prev => [...prev, ...newParticles]);
-        setTimeout(() => setFireworks(prev => prev.filter(p => !newParticles.includes(p))), 1500);
-      }, i * delayBetween);
-    }
-    return totalWaitTime;
-  };
+      const updateTokens = (uid, val) => {
+        const u = allUsers.find(x => x.id === uid);
+        if (u) db.setUser(uid, { tokens: Math.max(0, (u.tokens || 0) + val) });
+      };
+      const updatePoints = (uid, val) => {
+        const u = allUsers.find(x => x.id === uid);
+        if (u) db.setUser(uid, { points: Math.max(0, (u.points || 0) + val) });
+      };
+      const deleteUser = (uid) => { db.deleteUser(uid); setDeleteConfirm(null); };
+      const nukeAllUsers = () => { db.deleteAllUsers(); setShowNukeConfirm(false); setShowSettingsModal(false); };
 
-  const getActiveUser = () => {
-    const id = localStorage.getItem('wheel_user_id');
-    return allUsers.find(u => u.id === id) || { username: 'Gæst', tokens: 0, points: 0 };
-  };
-
-  const updateTokens = async (uid, val) => {
-    const u = allUsers.find(x => x.id === uid);
-    if(u) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', uid), { tokens: Math.max(0, (u.tokens || 0) + val) });
-  };
-
-  const updatePoints = async (uid, val) => {
-    const u = allUsers.find(x => x.id === uid);
-    if(u) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', uid), { points: Math.max(0, (u.points || 0) + val) });
-  };
-
-  const deleteUser = async (uid) => {
-    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', uid));
-    setDeleteConfirm(null);
-  };
-
-  const nukeAllUsers = async () => {
-    const usersCol = collection(db, 'artifacts', appId, 'public', 'data', 'users');
-    const snapshot = await getDocs(usersCol);
-    const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
-    await Promise.all(deletePromises);
-    setShowNukeConfirm(false);
-    setShowSettingsModal(false);
-  };
-
-  if (view === 'login') return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 text-white font-sans text-center">
-      <div className="bg-slate-900 p-10 rounded-[2.5rem] w-full max-w-md border border-slate-800 shadow-2xl">
-        <h1 className="text-4xl font-black mb-8 tracking-tight text-indigo-500 uppercase">ROLL BETA</h1>
-        <form onSubmit={(e) => {
-          e.preventDefault();
-          const name = loginName.trim();
-          if (!name) return;
-          if (name.toLowerCase() === 'admin' && loginPass === config.adminPass) {
-            localStorage.setItem('wheel_role', 'admin');
-            setView('admin');
-          } else {
-            const userId = name.toLowerCase().replace(/\s+/g, '_');
-            const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', userId);
-            getDoc(userRef).then(snap => {
-              if (!snap.exists()) setDoc(userRef, { username: name, tokens: 0, points: 0, createdAt: Date.now() });
-              localStorage.setItem('wheel_user_id', userId);
-              localStorage.setItem('wheel_role', 'user');
-              setView('user');
-            });
+      function handleLogin() {
+        const name = loginName.trim();
+        if (!name) return;
+        if (name.toLowerCase() === 'admin' && loginPass === config.adminPass) {
+          localStorage.setItem('wheel_role', 'admin');
+          setView('admin');
+        } else {
+          const userId = name.toLowerCase().replace(/\s+/g, '_');
+          if (!db.getUser(userId)) {
+            db.setUser(userId, { username: name, tokens: 0, points: 0, createdAt: Date.now() });
           }
-        }} className="space-y-4">
-          <input type="text" className="w-full bg-slate-950 p-4 rounded-2xl border border-slate-800 outline-none focus:border-indigo-500 transition-colors" value={loginName} onChange={e => setLoginName(e.target.value)} placeholder="Dit Navn" />
-          {loginName.toLowerCase() === 'admin' && <input type="password" underline="none" className="w-full bg-slate-950 p-4 rounded-2xl border border-slate-800 outline-none focus:border-indigo-500 transition-colors" value={loginPass} onChange={e => setLoginPass(e.target.value)} placeholder="Admin Kode" />}
-          <button className="w-full bg-indigo-600 py-4 rounded-2xl font-black text-lg hover:bg-indigo-500 transition-all active:scale-95 shadow-lg shadow-indigo-500/20 uppercase tracking-widest">Start Spillet</button>
-        </form>
-      </div>
-    </div>
-  );
+          localStorage.setItem('wheel_user_id', userId);
+          localStorage.setItem('wheel_role', 'user');
+          setView('user');
+        }
+      }
 
-  if (view === 'admin') return (
-    <div className="min-h-screen bg-slate-950 text-white p-4 lg:p-10 font-sans">
-      <div className="max-w-[1200px] mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-black flex items-center gap-2"><Settings className="text-indigo-500" size={24} /> ADMIN</h1>
-          <div className="flex items-center gap-2">
-             <button onClick={() => setShowSettingsModal(true)} title="Indstillinger" className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-slate-400 hover:text-white transition-colors"><Settings size={20} /></button>
-             <button onClick={() => setShowShareModal(true)} title="Del Link" className="bg-indigo-600 p-2.5 rounded-xl text-white hover:bg-indigo-500 transition-colors"><Share2 size={20} /></button>
-             <div className="bg-slate-900 px-4 py-2 rounded-xl border border-slate-800 flex items-center gap-3 ml-2">
-                <span className="text-xs font-black text-slate-500 uppercase">Beløb:</span>
-                <input type="number" className="w-12 bg-transparent text-indigo-400 font-black text-lg outline-none" value={adminAmount} onChange={e => setAdminAmount(parseInt(e.target.value) || 0)}/>
-             </div>
-             <button onClick={handleLogout} className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-red-400 hover:bg-red-500/10 transition-colors ml-2"><LogOut size={20} /></button>
-          </div>
-        </div>
-        <div className="bg-slate-900 rounded-3xl border border-slate-800 overflow-hidden shadow-2xl">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-950/50 border-b border-slate-800">
-                  <th className="p-5 text-xs font-black text-slate-500 uppercase tracking-widest">Navn</th>
-                  <th className="p-5 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Tokens</th>
-                  <th className="p-5 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Points</th>
-                  <th className="p-5 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Token Kontrol</th>
-                  <th className="p-5 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Point Kontrol</th>
-                  <th className="p-5 text-xs font-black text-slate-500 uppercase tracking-widest text-right">Handlinger</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {allUsers.map(u => (
-                  <tr key={u.id} className="hover:bg-slate-800/30 transition-colors group">
-                    <td className="p-5 font-bold text-slate-200">{u.username}<div className="text-[10px] text-slate-600 font-mono">{u.id}</div></td>
-                    <td className="p-5 text-center"><span className="bg-indigo-500/10 text-indigo-400 px-3 py-1 rounded-lg font-black text-sm border border-indigo-500/20">{u.tokens || 0}</span></td>
-                    <td className="p-5 text-center"><span className="bg-amber-500/10 text-amber-400 px-3 py-1 rounded-lg font-black text-sm border border-amber-500/20">{u.points || 0}</span></td>
-                    <td className="p-5"><div className="flex justify-center gap-1">
-                        <button onClick={() => updateTokens(u.id, adminAmount)} className="w-8 h-8 bg-indigo-500/20 text-indigo-500 rounded-lg hover:bg-indigo-500 hover:text-white transition-all flex items-center justify-center font-black"><Plus size={14}/></button>
-                        <button onClick={() => updateTokens(u.id, -adminAmount)} className="w-8 h-8 bg-slate-800 text-slate-400 rounded-lg hover:bg-red-500 hover:text-white transition-all flex items-center justify-center font-black"><Minus size={14}/></button>
-                    </div></td>
-                    <td className="p-5"><div className="flex justify-center gap-1">
-                        <button onClick={() => updatePoints(u.id, adminAmount)} className="w-8 h-8 bg-amber-500/20 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-white transition-all flex items-center justify-center font-black"><Plus size={14}/></button>
-                        <button onClick={() => updatePoints(u.id, -adminAmount)} className="w-8 h-8 bg-slate-800 text-slate-400 rounded-lg hover:bg-red-500 hover:text-white transition-all flex items-center justify-center font-black"><Minus size={14}/></button>
-                    </div></td>
-                    <td className="p-5 text-right">
-                      {deleteConfirm === u.id ? (
-                        <div className="flex items-center justify-end gap-2 animate-in fade-in slide-in-from-right-2">
-                           <button onClick={() => deleteUser(u.id)} className="bg-red-600 text-white px-3 py-1 rounded-lg font-bold text-[10px] uppercase">Slet</button>
-                           <button onClick={() => setDeleteConfirm(null)} className="text-slate-400 px-2 py-1 text-[10px] font-bold">Nej</button>
-                        </div>
-                      ) : (
-                        <button onClick={() => setDeleteConfirm(u.id)} className="text-slate-700 hover:text-red-500 transition-colors p-2"><Trash2 size={18} /></button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      {showShareModal && <ShareModal url={config.shareUrl} onClose={() => setShowShareModal(false)} copyToClipboard={() => {
-          const textArea = document.createElement("textarea");
-          textArea.value = config.shareUrl;
-          document.body.appendChild(textArea);
-          textArea.select();
-          document.execCommand('copy');
-          setCopyStatus(true);
-          setTimeout(() => setCopyStatus(false), 2000);
-          document.body.removeChild(textArea);
-      }} copyStatus={copyStatus} />}
-      {showSettingsModal && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[200] flex items-center justify-center p-6">
-          <div className="bg-slate-900 w-full max-w-md p-8 rounded-[2.5rem] border border-slate-800 shadow-2xl relative text-white">
-            <button onClick={() => setShowSettingsModal(false)} className="absolute top-6 right-6 text-slate-500 hover:text-white"><X size={24} /></button>
-            <h2 className="text-2xl font-black mb-6 uppercase tracking-tight">Indstillinger</h2>
-            <div className="space-y-6">
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block flex items-center gap-2"><LinkIcon size={12}/> Delings Link</label>
-                <input type="text" className="w-full bg-slate-950 p-4 rounded-2xl border border-slate-800 outline-none focus:border-indigo-500 text-indigo-400 font-mono text-sm" value={newShareUrl} onChange={e => setNewShareUrl(e.target.value)} placeholder="https://..."/>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 block flex items-center gap-2"><Key size={12}/> Admin Kodeord</label>
-                <input type="text" className="w-full bg-slate-950 p-4 rounded-2xl border border-slate-800 outline-none focus:border-indigo-500 text-indigo-400 font-mono text-sm" value={newAdminPass} onChange={e => setNewAdminPass(e.target.value)} placeholder="Nyt kodeord..."/>
-              </div>
-              
-              <div className="pt-4 border-t border-slate-800">
-                <button 
-                  onClick={() => setShowNukeConfirm(true)}
-                  className="w-full bg-red-950/30 text-red-500 py-4 rounded-2xl font-black text-sm border border-red-500/20 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2 uppercase tracking-widest"
-                >
-                  <AlertTriangle size={18} /> Slet alle brugere
-                </button>
-              </div>
-
-              <button onClick={async () => {
-                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'global'), { shareUrl: newShareUrl, adminPass: newAdminPass }, { merge: true });
-                setShowSettingsModal(false);
-              }} className="w-full bg-indigo-600 py-4 rounded-2xl font-black text-lg hover:bg-indigo-500 transition-all uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"><Check size={20} /> Gem Ændringer</button>
+      // --- LOGIN VIEW ---
+      if (view === 'login') return (
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 text-white text-center">
+          <div className="bg-slate-900 p-10 rounded-3xl w-full max-w-md border border-slate-800 shadow-2xl">
+            <h1 className="text-4xl font-black mb-8 tracking-tight text-indigo-500 uppercase">LykkeBæltet</h1>
+            <div className="space-y-4">
+              <input type="text" className="w-full bg-slate-950 p-4 rounded-2xl border border-slate-800 outline-none text-white" value={loginName}
+                onChange={e => setLoginName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleLogin(); }} placeholder="Dit Navn" />
+              {loginName.toLowerCase() === 'admin' && (
+                <input type="password" className="w-full bg-slate-950 p-4 rounded-2xl border border-slate-800 outline-none text-white" value={loginPass}
+                  onChange={e => setLoginPass(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleLogin(); }} placeholder="Admin Kode" />
+              )}
+              <button onClick={handleLogin} className="w-full bg-indigo-600 py-4 rounded-2xl font-black text-lg hover:bg-indigo-500 transition-all uppercase tracking-widest">
+                Start Spillet
+              </button>
             </div>
           </div>
         </div>
-      )}
+      );
 
-      {showNukeConfirm && (
-        <div className="fixed inset-0 bg-red-950/60 backdrop-blur-xl z-[300] flex items-center justify-center p-6 animate-in fade-in duration-300">
-          <div className="bg-slate-900 w-full max-sm p-10 rounded-[3rem] border border-red-500 shadow-2xl text-center">
-            <div className="w-20 h-20 bg-red-500/10 rounded-3xl flex items-center justify-center mb-6 mx-auto"><AlertTriangle size={40} className="text-red-500" /></div>
-            <h2 className="text-2xl font-black mb-4 uppercase tracking-tight text-white">ER DU SIKKER?</h2>
-            <p className="text-slate-400 text-sm mb-8 leading-relaxed">Dette vil slette alle spillere, deres tokens og points permanent. Handlingen kan ikke fortrydes.</p>
-            <div className="flex flex-col gap-3">
-              <button onClick={nukeAllUsers} className="w-full bg-red-600 py-4 rounded-2xl font-black text-white hover:bg-red-500 transition-all uppercase tracking-widest">Ja, slet alt!</button>
-              <button onClick={() => setShowNukeConfirm(false)} className="w-full bg-slate-800 py-4 rounded-2xl font-black text-slate-300 hover:bg-slate-700 transition-all uppercase tracking-widest">Fortryd</button>
+      // --- ADMIN VIEW ---
+      if (view === 'admin') return (
+        <div className="min-h-screen bg-slate-950 text-white p-4 font-sans">
+          <div className="max-w-5xl mx-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h1 className="text-2xl font-black flex items-center gap-2">
+                <Settings className="text-indigo-500" size={24} /> ADMIN
+              </h1>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setShowSettingsModal(true)} className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-slate-400 hover:text-white transition-colors"><Settings size={20} /></button>
+                <button onClick={() => setShowShareModal(true)} className="bg-indigo-600 p-2.5 rounded-xl text-white hover:bg-indigo-500 transition-colors"><Share2 size={20} /></button>
+                <div className="bg-slate-900 px-4 py-2 rounded-xl border border-slate-800 flex items-center gap-3 ml-2">
+                  <span className="text-xs font-black text-slate-500 uppercase">Beløb:</span>
+                  <input type="number" className="w-12 bg-transparent text-indigo-400 font-black text-lg outline-none" value={adminAmount} onChange={e => setAdminAmount(parseInt(e.target.value) || 0)} />
+                </div>
+                <button onClick={handleLogout} className="bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-red-400 hover:bg-red-500/10 transition-colors ml-2"><LogOut size={20} /></button>
+              </div>
+            </div>
+            <div className="bg-slate-900 rounded-3xl border border-slate-800 overflow-hidden shadow-2xl">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-950/50 border-b border-slate-800">
+                      <th className="p-5 text-xs font-black text-slate-500 uppercase tracking-widest">Navn</th>
+                      <th className="p-5 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Tokens</th>
+                      <th className="p-5 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Points</th>
+                      <th className="p-5 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Tokens +/-</th>
+                      <th className="p-5 text-xs font-black text-slate-500 uppercase tracking-widest text-center">Points +/-</th>
+                      <th className="p-5 text-xs font-black text-slate-500 uppercase tracking-widest text-right">Handlinger</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {allUsers.map(u => (
+                      <tr key={u.id} className="hover:bg-slate-800/30 transition-colors">
+                        <td className="p-5 font-bold text-slate-200">{u.username}<div className="text-xs text-slate-600 font-mono">{u.id}</div></td>
+                        <td className="p-5 text-center"><span className="bg-indigo-500/10 text-indigo-400 px-3 py-1 rounded-lg font-black text-sm border border-indigo-500/20">{u.tokens || 0}</span></td>
+                        <td className="p-5 text-center"><span className="bg-amber-500/10 text-amber-400 px-3 py-1 rounded-lg font-black text-sm border border-amber-500/20">{u.points || 0}</span></td>
+                        <td className="p-5"><div className="flex justify-center gap-1">
+                          <button onClick={() => updateTokens(u.id, adminAmount)} className="w-8 h-8 bg-indigo-500/20 text-indigo-500 rounded-lg hover:bg-indigo-500 hover:text-white transition-all flex items-center justify-center font-black"><Plus size={14}/></button>
+                          <button onClick={() => updateTokens(u.id, -adminAmount)} className="w-8 h-8 bg-slate-800 text-slate-400 rounded-lg hover:bg-red-500 hover:text-white transition-all flex items-center justify-center font-black"><Minus size={14}/></button>
+                        </div></td>
+                        <td className="p-5"><div className="flex justify-center gap-1">
+                          <button onClick={() => updatePoints(u.id, adminAmount)} className="w-8 h-8 bg-amber-500/20 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-white transition-all flex items-center justify-center font-black"><Plus size={14}/></button>
+                          <button onClick={() => updatePoints(u.id, -adminAmount)} className="w-8 h-8 bg-slate-800 text-slate-400 rounded-lg hover:bg-red-500 hover:text-white transition-all flex items-center justify-center font-black"><Minus size={14}/></button>
+                        </div></td>
+                        <td className="p-5 text-right">
+                          {deleteConfirm === u.id ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <button onClick={() => deleteUser(u.id)} className="bg-red-600 text-white px-3 py-1 rounded-lg font-bold text-xs uppercase">Slet</button>
+                              <button onClick={() => setDeleteConfirm(null)} className="text-slate-400 px-2 py-1 text-xs font-bold">Nej</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setDeleteConfirm(u.id)} className="text-slate-700 hover:text-red-500 transition-colors p-2"><Trash2 size={18} /></button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
+
+          {showShareModal && <ShareModal url={config.shareUrl} onClose={() => setShowShareModal(false)} copyToClipboard={() => {
+            navigator.clipboard.writeText(config.shareUrl).catch(() => {});
+            setCopyStatus(true); setTimeout(() => setCopyStatus(false), 2000);
+          }} copyStatus={copyStatus} />}
+
+          {showSettingsModal && (
+            <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6 text-white">
+              <div className="bg-slate-900 w-full max-w-md p-8 rounded-3xl border border-slate-800 shadow-2xl relative">
+                <button onClick={() => setShowSettingsModal(false)} className="absolute top-6 right-6 text-slate-500 hover:text-white"><X size={24} /></button>
+                <h2 className="text-2xl font-black mb-6 uppercase tracking-tight">Indstillinger</h2>
+                <div className="space-y-6">
+                  <div>
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2"><ExternalLink size={12}/> Delings Link</label>
+                    <input type="text" className="w-full bg-slate-950 p-4 rounded-2xl border border-slate-800 outline-none text-indigo-400 font-mono text-sm" value={newShareUrl} onChange={e => setNewShareUrl(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2"><Key size={12}/> Admin Kodeord</label>
+                    <input type="text" className="w-full bg-slate-950 p-4 rounded-2xl border border-slate-800 outline-none text-indigo-400 font-mono text-sm" value={newAdminPass} onChange={e => setNewAdminPass(e.target.value)} />
+                  </div>
+                  <div className="pt-4 border-t border-slate-800">
+                    <button onClick={() => setShowNukeConfirm(true)} className="w-full bg-red-950/30 text-red-500 py-4 rounded-2xl font-black text-sm border border-red-500/20 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2 uppercase tracking-widest">
+                      <AlertTriangle size={18} /> Slet alle brugere
+                    </button>
+                  </div>
+                  <button onClick={() => { db.setConfig({ shareUrl: newShareUrl, adminPass: newAdminPass }); setShowSettingsModal(false); }}
+                    className="w-full bg-indigo-600 py-4 rounded-2xl font-black text-lg hover:bg-indigo-500 transition-all uppercase tracking-widest flex items-center justify-center gap-2">
+                    <Check size={20} /> Gem Ændringer
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showNukeConfirm && (
+            <div className="fixed inset-0 bg-red-950/60 backdrop-blur-xl z-50 flex items-center justify-center p-6">
+              <div className="bg-slate-900 w-full max-w-md p-10 rounded-3xl border border-red-500 shadow-2xl text-center">
+                <h2 className="text-2xl font-black mb-4 uppercase text-white">ER DU SIKKER?</h2>
+                <p className="text-slate-400 text-sm mb-8">Dette vil slette alle spillere permanent.</p>
+                <div className="flex flex-col gap-3">
+                  <button onClick={nukeAllUsers} className="w-full bg-red-600 py-4 rounded-2xl font-black text-white hover:bg-red-500 transition-all uppercase tracking-widest">Ja, slet alt!</button>
+                  <button onClick={() => setShowNukeConfirm(false)} className="w-full bg-slate-800 py-4 rounded-2xl font-black text-slate-300 hover:bg-slate-700 transition-all uppercase tracking-widest">Fortryd</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      )}
-    </div>
-  );
+      );
 
-  const active = getActiveUser();
-  const currentStrip = spinPhase === 'multi' ? MULTI_SECTIONS : POINT_SECTIONS;
-  const isSuperActive = spinPhase === 'multi' || currentMultiplier > 1;
-  const themeColor = isSuperActive ? '#fbbf24' : '#3b82f6';
+      // --- USER / GAME VIEW ---
+      const active = getActiveUser();
+      const isSuperActive = spinPhase === 'multi' || currentMultiplier > 1;
+      const themeColor = isSuperActive ? '#fbbf24' : '#3b82f6';
+      const currentStrip = spinPhase === 'multi' ? MULTI_SECTIONS : POINT_SECTIONS;
 
-  return (
-    <div className={`min-h-screen bg-slate-950 text-white flex flex-col items-center justify-between p-6 relative overflow-hidden font-sans transition-all duration-300`}
-         style={{ transform: shakeIntensity > 0 ? `translate(${Math.random() * shakeIntensity - shakeIntensity/2}px, ${Math.random() * shakeIntensity - shakeIntensity/2}px)` : 'none' }}>
-      
-      {beltGlowColor && (
-        <div className="fixed inset-0 z-0 animate-pulse duration-[1500ms] pointer-events-none"
-             style={{ 
-               background: `radial-gradient(circle at center, ${beltGlowColor}88 0%, ${beltGlowColor}33 40%, transparent 85%)`,
-               filter: 'blur(60px)'
-             }} />
-      )}
+      return (
+        <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-between p-6 relative overflow-hidden font-sans"
+             style={{ transform: shakeIntensity > 0 ? `translate(${Math.random()*shakeIntensity - shakeIntensity/2}px, ${Math.random()*shakeIntensity - shakeIntensity/2}px)` : 'none' }}>
 
-      {bgGlow && (
-        <div className="fixed inset-0 z-10 animate-in fade-in duration-500" 
-             style={{ background: `radial-gradient(circle at center, ${bgGlow}44 0%, #020617 80%)` }} />
-      )}
+          {screenFlash && (
+            <div className="fixed inset-0 z-40 pointer-events-none" style={{ background: `radial-gradient(circle, ${screenFlash}66 0%, transparent 80%)`, opacity: 0.6 }}></div>
+          )}
 
-      {shockwaves.map(s => (
-        <div key={s.id} className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 animate-shockwave pointer-events-none z-[55]" 
-             style={{ borderColor: s.color }} />
-      ))}
+          <style>{`
+            @keyframes shockwave {
+              0% { width: 0; height: 0; opacity: 1; border-width: 10px; }
+              100% { width: 350vw; height: 350vw; opacity: 0; border-width: 0px; }
+            }
+            .animate-shockwave { animation: shockwave 1.2s cubic-bezier(0.1,0,0.2,1) forwards; }
+            @keyframes starPopIn {
+              0% { transform: scale(0) rotate(-30deg); opacity: 0; }
+              70% { transform: scale(1.4) rotate(15deg); opacity: 1; }
+              100% { transform: scale(1.2) rotate(0deg); opacity: 1; }
+            }
+            @keyframes starPopOut {
+              0% { transform: scale(1.2) rotate(0deg); opacity: 1; }
+              100% { transform: scale(0) rotate(25deg); opacity: 0; }
+            }
+            @keyframes floatUp {
+              0% { transform: translateY(0) scale(1); opacity: 0; }
+              20% { opacity: 1; transform: translateY(-20px) scale(1.5); }
+              100% { transform: translateY(-120px) scale(2); opacity: 0; }
+            }
+            .animate-float-up { animation: floatUp 2s cubic-bezier(0.2,0.8,0.2,1) forwards; }
+            .star-spawn { animation: starPopIn 0.5s cubic-bezier(0.175,0.885,0.32,1.275) forwards; }
+            .star-pop-out { animation: starPopOut 0.3s cubic-bezier(0.6,-0.28,0.735,0.045) forwards; }
+            .star-svg { filter: drop-shadow(0 0 8px var(--glow-color)); }
+          `}</style>
 
-      <div className="fixed inset-0 pointer-events-none z-[60]">
-        {flashes.map(f => (
-          <div key={f.id} className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full animate-explosion-flash"
-            style={{ left: `${f.x}vw`, top: `${f.y}vh`, backgroundColor: 'white', boxShadow: `0 0 ${f.size}px ${f.size/2}px ${f.color}` }} />
-        ))}
-        {fireworks.map(p => (
-          <div key={p.id} className="absolute rounded-full" 
-            style={{ 
-              left: `${p.x}vw`, top: `${p.y}vh`, width: p.size, height: p.size, backgroundColor: p.color, 
-              boxShadow: `0 0 ${p.size * 1.5}px ${p.color}`, '--angle': `${p.angle}deg`, '--dist': `${p.distance}px`,
-              animation: `firework-particle ${p.duration}s cubic-bezier(0.1, 1, 0.2, 1) forwards`
-            }} />
-        ))}
-      </div>
-
-      <div className="w-full max-w-xl flex justify-between items-center bg-slate-900/50 p-4 rounded-[2rem] border border-slate-800 backdrop-blur-md z-[70]">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center font-black shadow-lg shadow-indigo-600/20">{active.username[0]?.toUpperCase()}</div>
-          <span className="font-bold text-sm tracking-wide">{active.username}</span>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowShareModal(true)} className="p-2.5 text-slate-500 hover:text-indigo-400 transition-colors bg-slate-950/50 rounded-xl border border-slate-800"><Share2 size={18} /></button>
-          <div className="text-amber-400 font-black flex items-center gap-1.5 px-4 py-1.5 bg-amber-400/10 rounded-full border border-amber-400/20">{active.points || 0} <Star size={14} fill="currentColor" /></div>
-          <div className="text-indigo-400 font-bold text-xs flex items-center px-4 py-1.5 bg-indigo-400/10 rounded-full border border-amber-400/20 uppercase tracking-widest">{active.tokens || 0} Spins</div>
-          <button onClick={handleLogout} className="p-2 text-slate-500 hover:text-red-400 transition-colors"><LogOut size={20} /></button>
-        </div>
-      </div>
-
-      <div className={`w-full max-w-4xl relative py-12 z-20 transition-transform duration-100 ${shakeIntensity > 15 ? 'scale-[1.03]' : 'scale-100'}`}>
-        
-        <div className="h-72 w-full bg-slate-950 rounded-[3.5rem] relative overflow-hidden transition-all duration-700 border-2"
-          style={{ borderColor: themeColor, boxShadow: `0 0 ${20 + shakeIntensity}px ${themeColor}66, inset 0 0 60px rgba(0,0,0,0.9)` }}>
-          
-          {/* Centermarkør */}
-          <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-1.5 z-40 transition-all duration-500" style={{ backgroundColor: themeColor, boxShadow: `0 0 20px ${themeColor}, 0 0 40px ${themeColor}` }}></div>
-          
-          <div className="flex items-center absolute h-full transition-none will-change-transform" style={{ transform: `translateX(${-offset}px)`, left: '50%' }}>
-            {Array.from({ length: 40 }).map((_, loopIdx) => (
-              <React.Fragment key={loopIdx}>
-                {currentStrip.map((item, idx) => {
-                  const isWinner = winningIndex === idx; 
-                  const displayVal = (spinPhase === 'point' || spinPhase === 'idle') ? item.p * currentMultiplier : item.p;
-                  
-                  return (
-                    <div key={`${loopIdx}-${idx}`} className="flex-shrink-0 flex items-center justify-center border-r border-white/5 relative h-full" style={{ width: `${ITEM_WIDTH}px` }}>
-                      
-                      {/* EKSTRA TYDELIG GRADIENT BAGGRUND */}
-                      <div className="absolute inset-0 z-0 transition-all duration-300 pointer-events-none overflow-hidden" 
-                           style={{ 
-                             // Nu med en endnu mere mættet farveflade (90% opacity i toppen)
-                             background: isWinner 
-                               ? `${item.color}` 
-                               : `radial-gradient(circle at center, ${item.color} 0%, ${item.color}cc 40%, ${item.color}88 100%)`,
-                             opacity: isWinner ? 1 : 0.95,
-                             boxShadow: isWinner ? `0 0 40px ${item.color}, inset 0 0 30px rgba(0,0,0,0.4)` : 'none'
-                           }}>
-                           {/* Lysende "Glint" effekt for at gøre gradienten mere synlig */}
-                           <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_50%_0%,white,transparent_70%)]"></div>
-                           <div className="absolute bottom-0 left-0 right-0 h-1/2 opacity-30" style={{ background: `linear-gradient(to top, rgba(0,0,0,0.5), transparent)` }}></div>
-                      </div>
-                      
-                      {/* Felt-kant glød */}
-                      <div className="absolute inset-x-2 inset-y-4 border rounded-[2.5rem] transition-all duration-500" 
-                           style={{ 
-                             borderColor: isWinner ? 'rgba(255,255,255,0.6)' : `${item.color}66`,
-                             boxShadow: isWinner ? `0 0 20px ${item.color}` : 'none'
-                           }}></div>
-
-                      <div className="relative z-10 flex items-center justify-center w-full h-full">
-                        {spinPhase === 'multi' ? (
-                          <StarIcon color={item.color} value={item.p} isWinner={isWinner} isGlow={item.glow} />
-                        ) : (
-                          <div className={`w-24 h-24 rounded-[2.2rem] flex items-center justify-center text-4xl font-black transition-all duration-500 ${item.glow ? 'scale-110' : ''} ${isWinner ? 'scale-125' : ''} text-white`}
-                            style={{ 
-                              backgroundColor: item.color, 
-                              boxShadow: isWinner 
-                                ? `0 0 80px ${item.color}, 0 0 120px ${item.color}, inset 0 2px 10px rgba(255,255,255,0.5)` 
-                                : (item.glow ? `0 0 35px ${item.color}bb` : '0 10px 20px rgba(0,0,0,0.5)') 
-                            }}
-                          >
-                            {displayVal}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </React.Fragment>
+          <div className="fixed inset-0 pointer-events-none z-20 flex items-center justify-center overflow-hidden">
+            {shockwaves.map(wave => (
+              <div key={wave.id} className="absolute rounded-full border animate-shockwave"
+                   style={{ borderColor: wave.color, boxShadow: `0 0 50px ${wave.color}` }} />
             ))}
           </div>
+
+          <div className="fixed inset-0 pointer-events-none z-30 flex items-center justify-center">
+            {floatingTexts.map(t => (
+              <div key={t.id} className="animate-float-up pointer-events-none">
+                <span className="text-6xl font-black" style={{ color: t.color }}>+{t.value}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="fixed inset-0 pointer-events-none z-25">
+            {flyingStars.map(star => (
+              <div key={star.id} className={`absolute flex items-center justify-center ${star.phase === 'spawn' ? 'star-spawn' : 'star-pop-out'}`}
+                   style={{ left: star.x - 26, top: star.y - 26, width: '52px', height: '52px', color: star.color, '--glow-color': star.glow }}>
+                <svg viewBox="0 0 24 24" width="48" height="48" className="star-svg" stroke="rgba(0,0,0,0.3)" strokeWidth="0.5">
+                  <path fill="currentColor" d="M12 1.74l3.09 6.26 6.91 1-5 4.87 1.18 6.88-6.18-3.25-6.18 3.25 1.18-6.88-5-4.87 6.91-1z" />
+                </svg>
+              </div>
+            ))}
+          </div>
+
+          <div className="w-full max-w-xl flex justify-between items-center bg-slate-900/50 p-4 rounded-3xl border border-slate-800 backdrop-blur-md z-10">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center font-black shadow-lg">
+                {active.username[0]?.toUpperCase()}
+              </div>
+              <span className="font-bold text-sm tracking-wide">{active.username}</span>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => setShowShareModal(true)} className="p-2.5 text-slate-500 hover:text-indigo-400 transition-colors bg-slate-950/50 rounded-xl border border-slate-800">
+                <Share2 size={18} />
+              </button>
+              <div ref={scoreRef} className="text-amber-400 font-black flex items-center gap-1.5 px-4 py-1.5 bg-amber-400/10 rounded-full border border-amber-400/20">
+                {active.points || 0} <Star size={14} fill="currentColor" />
+              </div>
+              <div className="text-indigo-400 font-bold text-xs flex items-center px-4 py-1.5 bg-indigo-400/10 rounded-full border border-indigo-400/10 uppercase tracking-widest">
+                {active.tokens || 0} Spins
+              </div>
+              <button onClick={handleLogout} className="p-2 text-slate-500 hover:text-red-400 transition-colors">
+                <LogOut size={20} />
+              </button>
+            </div>
+          </div>
+
+          <div className="w-full max-w-4xl relative py-12 z-10">
+            <div ref={beltContainerRef} className="h-72 w-full bg-slate-950 rounded-3xl relative overflow-hidden border-2"
+              style={{ borderColor: themeColor, boxShadow: `0 0 ${20 + shakeIntensity}px ${themeColor}66, inset 0 0 60px rgba(0,0,0,0.9)` }}>
+              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-1.5 z-10"
+                   style={{ backgroundColor: themeColor, boxShadow: `0 0 20px ${themeColor}, 0 0 40px ${themeColor}` }}></div>
+              <div className="flex items-center absolute h-full" style={{ transform: `translateX(${-offset}px)`, left: '50%' }}>
+                {Array.from({ length: 40 }).map((_, loopIdx) => (
+                  <React.Fragment key={loopIdx}>
+                    {currentStrip.map((item, idx) => {
+                      const isWinner = winningIndex === idx;
+                      const displayVal = (spinPhase === 'point' || spinPhase === 'idle') ? item.p * currentMultiplier : item.p;
+                      return (
+                        <div key={`${loopIdx}-${idx}`} className="flex-shrink-0 flex items-center justify-center border-r border-white/5 relative h-full" style={{ width: `${ITEM_WIDTH}px` }}>
+                          <div className="absolute inset-0 transition-all duration-300 pointer-events-none"
+                               style={{ background: isWinner ? item.color : `radial-gradient(circle at center, ${item.color} 0%, ${item.color}cc 40%, ${item.color}88 100%)`, opacity: isWinner ? 1 : 0.95 }} />
+                          <div className="relative z-10 flex items-center justify-center w-full h-full">
+                            {spinPhase === 'multi' ? (
+                              <StarIcon color="white" value={item.p} isWinner={isWinner} />
+                            ) : (
+                              <div className={`flex flex-col items-center justify-center transition-all duration-500 ${isWinner ? 'scale-125' : 'scale-100'}`}>
+                                <span className="text-4xl font-black leading-none">{displayVal}</span>
+                                <span className="text-xs font-black uppercase tracking-tighter opacity-70 mt-1">POINTS</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="w-full max-w-xl flex flex-col gap-4 mb-8 z-10">
+            <div className="flex gap-4">
+              <button disabled={isSpinning || active.tokens < 1} onClick={() => handleSpin(false)}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 py-6 rounded-3xl font-black text-xl shadow-xl active:scale-95 transition-all flex flex-col items-center uppercase tracking-widest border-b-4 border-indigo-800">
+                Spin
+                <span className="text-xs opacity-60 font-bold">1 Token</span>
+              </button>
+              <button disabled={isSpinning || active.tokens < 5} onClick={() => handleSpin(true)}
+                className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-800 disabled:text-slate-500 py-6 rounded-3xl font-black text-xl shadow-xl active:scale-95 transition-all flex flex-col items-center uppercase tracking-widest border-b-4 border-amber-700 text-slate-900">
+                Super Spin
+                <span className="text-xs opacity-60 font-bold">5 Tokens</span>
+              </button>
+            </div>
+          </div>
+
+          {showShareModal && <ShareModal url={config.shareUrl} onClose={() => setShowShareModal(false)} copyToClipboard={() => {
+            navigator.clipboard.writeText(config.shareUrl).catch(() => {});
+            setCopyStatus(true); setTimeout(() => setCopyStatus(false), 2000);
+          }} copyStatus={copyStatus} />}
         </div>
-        <div className="absolute inset-y-0 left-0 w-40 bg-gradient-to-r from-slate-950 via-slate-950/40 to-transparent z-30 pointer-events-none rounded-l-[3.5rem]"></div>
-        <div className="absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-slate-950 via-slate-950/40 to-transparent z-30 pointer-events-none rounded-r-[3.5rem]"></div>
-      </div>
+      );
+    }
 
-      <div className="pb-12 w-full max-sm px-6 flex flex-col gap-4 z-50">
-        <button onClick={() => handleSpin(false)} disabled={active.tokens < 1 || isSpinning}
-          className={`w-full py-5 rounded-[2rem] font-black text-lg transition-all shadow-xl tracking-widest uppercase flex items-center justify-center gap-2 ${active.tokens >= 1 && !isSpinning ? 'bg-indigo-600 hover:bg-indigo-500 active:scale-95 shadow-indigo-600/20 border-b-4 border-indigo-800 text-white' : 'bg-slate-800 text-slate-600 grayscale cursor-not-allowed'}`}>
-          {isSpinning && spinPhase !== 'multi' ? 'Ruller...' : 'Normalt Spin (1)'}
-        </button>
-        <button onClick={() => handleSpin(true)} disabled={active.tokens < 5 || isSpinning}
-          className={`relative w-full py-7 rounded-[2rem] font-black text-2xl transition-all shadow-2xl tracking-widest uppercase flex items-center justify-center gap-3 overflow-hidden ${active.tokens >= 5 && !isSpinning ? 'bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 hover:scale-[1.03] active:scale-95 shadow-amber-500/30 text-slate-950 border-b-4 border-amber-700' : 'bg-slate-800 text-slate-600 grayscale cursor-not-allowed'}`}>
-          <Zap size={28} fill="currentColor" className={isSpinning ? 'animate-pulse' : ''} /> {isSpinning ? (spinPhase === 'multi' ? 'Find Multiplier!' : 'GIGANTISK GEVINST?!') : 'SUPER SPIN (5)'}
-        </button>
-      </div>
-
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes firework-particle {
-          0% { transform: translate(0, 0) scale(1.5); opacity: 1; }
-          100% { transform: translate(calc(cos(var(--angle)) * var(--dist)), calc(sin(var(--angle)) * var(--dist) + 100px)) scale(0); opacity: 0; }
-        }
-        @keyframes explosion-flash {
-          0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-          15% { transform: translate(-50%, -50%) scale(1.5); opacity: 1; }
-          100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
-        }
-        @keyframes shockwave {
-          0% { transform: translate(-50%, -50%) scale(1); opacity: 1; border-width: 15px; width: 80px; height: 80px; }
-          100% { transform: translate(-50%, -50%) scale(15); opacity: 0; border-width: 0px; width: 80px; height: 80px; }
-        }
-        .animate-explosion-flash { width: 20px; height: 20px; animation: explosion-flash 0.4s ease-out forwards; }
-        .animate-shockwave { animation: shockwave 1.2s cubic-bezier(0.1, 1, 0.2, 1) forwards; }
-      `}} />
-    </div>
-  );
-}
-
-function ShareModal({ url, onClose, copyToClipboard, copyStatus }) {
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}&bgcolor=1e293b&color=ffffff&margin=10`;
-  return (
-    <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[200] flex items-center justify-center p-6 animate-in fade-in duration-300">
-      <div className="bg-slate-900 w-full max-sm p-10 rounded-[3rem] border border-slate-800 shadow-2xl text-center relative flex flex-col items-center">
-        <button onClick={onClose} className="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors"><X size={24}/></button>
-        <div className="w-20 h-20 bg-indigo-500/10 rounded-3xl flex items-center justify-center mb-6"><QrCode size={40} className="text-indigo-500" /></div>
-        <h2 className="text-2xl font-black mb-2 uppercase tracking-tight text-white">Del Spillet</h2>
-        <div className="bg-slate-950 p-4 rounded-3xl mb-8 inline-block border border-slate-800"><img src={qrUrl} alt="QR Kode" className="w-48 h-48 rounded-xl" /></div>
-        <div className="relative group w-full">
-          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-indigo-400 font-mono text-xs overflow-hidden text-ellipsis whitespace-nowrap mb-6 pr-12 text-left">{url}</div>
-          <button onClick={copyToClipboard} className="absolute right-2 top-2 p-2 bg-indigo-600 rounded-xl text-white hover:bg-indigo-500 transition-all">
-            {copyStatus ? <Check size={16} /> : <LinkIcon size={16} />}
-          </button>
-        </div>
-        <button onClick={onClose} className="w-full bg-slate-800 py-4 rounded-2xl font-black text-slate-300 hover:bg-slate-700 transition-all uppercase tracking-widest">Færdig</button>
-      </div>
-    </div>
-  );
-}
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
