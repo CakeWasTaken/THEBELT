@@ -8,7 +8,7 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
   <style>
     body { margin: 0; background: #020617; }
   </style>
@@ -19,57 +19,26 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    // Lucide icons via UMD
-    const makeIcon = (name) => ({ size = 24, className = '', style = {} }) => {
-      const el = lucide[name];
-      if (!el) return null;
-      const svg = lucide.createElement(el);
-      // Use dangerouslySetInnerHTML trick via a wrapper
-      return React.createElement('span', {
-        className,
-        style: { display: 'inline-flex', alignItems: 'center', ...style },
-        dangerouslySetInnerHTML: {
-          __html: lucide.toSvg(el, { width: size, height: size, stroke: 'currentColor', 'stroke-width': 2, fill: 'none', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })
-        }
-      });
-    };
+    // --- INLINE SVG ICONS (no external dependency) ---
+    const svgIcon = (path, extraProps = {}) => ({ size = 24, className = '', fill = 'none' }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+           fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...extraProps}>
+        {path}
+      </svg>
+    );
 
-    // Build icons the proper way using lucide UMD
-    function Icon({ name, size = 24, className = '', fill }) {
-      const iconData = lucide.icons ? lucide.icons[name] : lucide[name];
-      if (!iconData) return null;
-      const [tag, attrs, children] = iconData;
-      const svgAttrs = {
-        xmlns: 'http://www.w3.org/2000/svg',
-        width: size,
-        height: size,
-        viewBox: '0 0 24 24',
-        fill: fill || 'none',
-        stroke: 'currentColor',
-        strokeWidth: 2,
-        strokeLinecap: 'round',
-        strokeLinejoin: 'round',
-        className,
-      };
-      const svgChildren = (children || []).map((child, i) => {
-        const [childTag, childAttrs] = child;
-        return React.createElement(childTag, { key: i, ...childAttrs });
-      });
-      return React.createElement('svg', svgAttrs, ...svgChildren);
-    }
-
-    const Settings    = (p) => <Icon name="settings" {...p} />;
-    const Star        = (p) => <Icon name="star" {...p} />;
-    const LogOut      = (p) => <Icon name="log-out" {...p} />;
-    const Trash2      = (p) => <Icon name="trash-2" {...p} />;
-    const Plus        = (p) => <Icon name="plus" {...p} />;
-    const Minus       = (p) => <Icon name="minus" {...p} />;
-    const Share2      = (p) => <Icon name="share-2" {...p} />;
-    const ExternalLink= (p) => <Icon name="external-link" {...p} />;
-    const X           = (p) => <Icon name="x" {...p} />;
-    const Check       = (p) => <Icon name="check" {...p} />;
-    const AlertTriangle=(p) => <Icon name="alert-triangle" {...p} />;
-    const Key         = (p) => <Icon name="key" {...p} />;
+    const Settings     = svgIcon(<><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></>);
+    const Star         = svgIcon(<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>);
+    const LogOut       = svgIcon(<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>);
+    const Trash2       = svgIcon(<><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></>);
+    const Plus         = svgIcon(<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>);
+    const Minus        = svgIcon(<line x1="5" y1="12" x2="19" y2="12"/>);
+    const Share2       = svgIcon(<><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></>);
+    const ExternalLink = svgIcon(<><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></>);
+    const X            = svgIcon(<><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>);
+    const Check        = svgIcon(<polyline points="20 6 9 17 4 12"/>);
+    const AlertTriangle= svgIcon(<><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>);
+    const Key          = svgIcon(<><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></>);
 
     // --- GOOGLE SHEETS DATABASE ---
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwKN5aiuRcyP_2kby4d4aesgkc7aYp6Bulc-_2vtwr9WyRReSZcbG6lUR1Luoc-hKXC/exec';
@@ -309,8 +278,8 @@
             setTimeout(() => {
               setFlyingStars(prev => prev.map(s => s.id === id ? { ...s, phase: 'pop' } : s));
               setTimeout(() => setFlyingStars(prev => prev.filter(s => s.id !== id)), 300);
-            }, 800);
-          }, i * 15);
+            }, 1000);
+          }, i * 20);
         }
       };
 
@@ -634,7 +603,7 @@
             ))}
           </div>
 
-          <div className="fixed inset-0 pointer-events-none z-25">
+          <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 25 }}>
             {flyingStars.map(star => (
               <div key={star.id} className={`absolute flex items-center justify-center ${star.phase === 'spawn' ? 'star-spawn' : 'star-pop-out'}`}
                    style={{ left: star.x - 26, top: star.y - 26, width: '52px', height: '52px', color: star.color, '--glow-color': star.glow }}>
